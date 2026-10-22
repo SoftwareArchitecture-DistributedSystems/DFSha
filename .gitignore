@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# Stubs generados por scripts/generate_proto.sh
+proto/generated/*
+!proto/generated/.gitkeep
+
+# Datos y temporales de los nodos de datos
+data-node/storage/*
+!data-node/storage/.gitkeep
+*.blk
+*.tmp
+
+# Estado local de Raft cuando se corre con el --data por defecto
+metadata-server/storage/data/
+
+# Logs del cluster
+logs/*
+!logs/.gitkeep
+
+# Secretos y certificados generados
+.env
+certs/
+
+# Entorno
+.DS_Store
+.idea/
+.vscode/
