@@ -1,0 +1,57 @@
+syntax = "proto3";
+package dfsha;
+import "auth.proto";
+
+// Contrato del plano de control. Casi todos los mensajes llevan un Status para
+// que el cliente sepa si la operación salió bien sin mirar códigos de gRPC.
+
+message Ack { Status status = 1; }
+message PathRequest { string jwt = 1; string path = 2; }
+message Entry { string name = 1; bool is_dir = 2; int64 size = 3; int32 version = 4; }
+message ListResponse { Status status = 1; repeated Entry entries = 2; }
+
+message OpenRequest { string jwt = 1; string path = 2; string mode = 3; string holder = 4; }   // mode: w | a
+message OpenResponse { Status status = 1; string session = 2; int32 file_version = 3; int32 num_blocks = 4; int64 file_size = 5; }
+message AllocateRequest { string jwt = 1; string session = 2; int32 block_index = 3; }
+message AllocateResponse { Status status = 1; string block_id = 2; int32 version = 3; repeated string pipeline = 4; string write_token = 5; }
+message CommitBlockRequest { string jwt = 1; string session = 2; int32 block_index = 3; string block_id = 4; int32 version = 5;
+                             string sha256 = 6; int64 size = 7; repeated string replicas = 8; int32 expected_version = 9; }
+message CommitFileRequest { string jwt = 1; string session = 2; int32 expected_version = 3; int32 num_blocks = 4; int64 total_size = 5; }
+message CommitFileResponse { Status status = 1; int32 file_version = 2; }
+
+message LocationsRequest { string jwt = 1; string path = 2; int64 offset = 3; int64 length = 4; }
+message BlockLocation { int32 index = 1; string block_id = 2; int32 version = 3; string sha256 = 4; int64 size = 5;
+                        int64 offset = 6; repeated string replicas = 7; string read_token = 8; }
+message LocationsResponse { Status status = 1; int32 file_version = 2; int64 total_size = 3; repeated BlockLocation blocks = 4; }
+
+message LockRequest { string jwt = 1; string path = 2; int32 block_index = 3; string mode = 4; int32 ttl = 5; string holder = 6; }  // block_index -1 = archivo
+message LockResponse { Status status = 1; int64 expires_at = 2; }
+
+message HeartbeatRequest { string addr = 1; int64 free_bytes = 2; }
+message BlockInfo { string block_id = 1; int64 age_s = 2; }
+message BlockReportRequest { string addr = 1; repeated BlockInfo blocks = 2; }
+
+service MetadataService {
+  // Namespace
+  rpc Mkdir(PathRequest) returns (Ack);
+  rpc Rmdir(PathRequest) returns (Ack);
+  rpc ListDir(PathRequest) returns (ListResponse);
+  rpc DeleteFile(PathRequest) returns (Ack);
+
+  // Escritura: abrir, pedir bloques y publicar al cerrar
+  rpc OpenFile(OpenRequest) returns (OpenResponse);
+  rpc AllocateBlock(AllocateRequest) returns (AllocateResponse);
+  rpc CommitBlock(CommitBlockRequest) returns (Ack);
+  rpc CommitFile(CommitFileRequest) returns (CommitFileResponse);
+
+  // Lectura
+  rpc GetBlockLocations(LocationsRequest) returns (LocationsResponse);
+
+  // Locks
+  rpc AcquireLock(LockRequest) returns (LockResponse);
+  rpc ReleaseLock(LockRequest) returns (Ack);
+
+  // Plano DN -> MS. No llevan JWT, se autentican con mTLS.
+  rpc Heartbeat(HeartbeatRequest) returns (Ack);
+  rpc BlockReport(BlockReportRequest) returns (Ack);
+}
