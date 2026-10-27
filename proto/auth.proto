@@ -1,0 +1,13 @@
+syntax = "proto3";
+package dfsha;
+
+// Status es común a todos los servicios. `leader` solo se completa cuando el
+// MS que respondió no es el líder y el cliente tiene que reintentar en otro lado.
+message Status { string code = 1; string message = 2; string leader = 3; }
+message Credentials { string uid = 1; string password = 2; }
+message AuthResponse { Status status = 1; string jwt = 2; int64 expires_at = 3; }
+
+service AuthService {
+  rpc Register(Credentials) returns (AuthResponse);
+  rpc Authenticate(Credentials) returns (AuthResponse);
+}
