@@ -1,0 +1,27 @@
+syntax = "proto3";
+package dfsha;
+
+// Contrato del plano de datos. Un bloque se manda en varios BlockChunk; la
+// cabecera (id, token, hash, versión y siguiente salto) va solo en el primero.
+
+message BlockChunk { string block_id = 1; string token = 2; repeated string next = 3; string sha256 = 4; int32 version = 5; bytes data = 6; }
+message WriteAck { repeated string acked = 1; string error = 2; }
+message ReadRequest { string block_id = 1; string token = 2; }
+message ReplicateRequest { string block_id = 1; string target = 2; string token = 3; string write_token = 4; }
+message ReplicateReply { bool ok = 1; string error = 2; }
+message DeleteRequest { string block_id = 1; string token = 2; }
+message DeleteReply { bool deleted = 1; }
+message StatusRequest { string block_id = 1; string token = 2; }
+message StatusReply { bool exists = 1; int64 size = 2; int32 version = 3; bool healthy = 4; }
+
+service DataNodeService {
+  // El cliente manda el bloque al primer DN y este lo reenvía al siguiente.
+  rpc WriteBlock(stream BlockChunk) returns (WriteAck);
+  rpc ReadBlock(ReadRequest) returns (stream BlockChunk);
+
+  // Estas dos las ordena el MS, no un cliente.
+  rpc ReplicateBlock(ReplicateRequest) returns (ReplicateReply);
+  rpc DeleteBlock(DeleteRequest) returns (DeleteReply);
+
+  rpc GetBlockStatus(StatusRequest) returns (StatusReply);
+}
