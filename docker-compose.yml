@@ -1,0 +1,103 @@
+# DFSha: 3 servidores de metadatos (Raft) + 5 nodos de datos + contenedor cliente.
+# Arranque: scripts/start_cluster.sh   (genera certificados mTLS y .env con secretos aleatorios)
+x-env: &env
+  TLS_DIR: /certs
+  TOKEN_SECRET: ${TOKEN_SECRET:-dev-token-secret}
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+  RAFT_PASSWORD: ${RAFT_PASSWORD:-dev-raft-password}
+
+services:
+  ms1:
+    build: {context: ., dockerfile: metadata-server/Dockerfile}
+    command: ["--self", "ms1:7000", "--peers", "ms2:7000,ms3:7000", "--data", "/data"]
+    environment: *env
+    volumes: ["ms1-data:/data", "./certs/ms1:/certs:ro"]
+    networks: [dfsha]
+    restart: unless-stopped
+  ms2:
+    build: {context: ., dockerfile: metadata-server/Dockerfile}
+    command: ["--self", "ms2:7000", "--peers", "ms1:7000,ms3:7000", "--data", "/data"]
+    environment: *env
+    volumes: ["ms2-data:/data", "./certs/ms2:/certs:ro"]
+    networks: [dfsha]
+    restart: unless-stopped
+  ms3:
+    build: {context: ., dockerfile: metadata-server/Dockerfile}
+    command: ["--self", "ms3:7000", "--peers", "ms1:7000,ms2:7000", "--data", "/data"]
+    environment: *env
+    volumes: ["ms3-data:/data", "./certs/ms3:/certs:ro"]
+    networks: [dfsha]
+    restart: unless-stopped
+  dn1:
+    build: {context: ., dockerfile: data-node/Dockerfile}
+    command: ["--addr", "dn1:7001", "--ms", "ms1:7100,ms2:7100,ms3:7100", "--data", "/data"]
+    environment:
+      <<: *env
+      MASTER_KEY_HEX: ${DN1_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes: ["dn1-data:/data", "./certs/dn1:/certs:ro"]
+    depends_on: [ms1, ms2, ms3]
+    networks: [dfsha]
+    restart: unless-stopped
+  dn2:
+    build: {context: ., dockerfile: data-node/Dockerfile}
+    command: ["--addr", "dn2:7001", "--ms", "ms1:7100,ms2:7100,ms3:7100", "--data", "/data"]
+    environment:
+      <<: *env
+      MASTER_KEY_HEX: ${DN2_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes: ["dn2-data:/data", "./certs/dn2:/certs:ro"]
+    depends_on: [ms1, ms2, ms3]
+    networks: [dfsha]
+    restart: unless-stopped
+  dn3:
+    build: {context: ., dockerfile: data-node/Dockerfile}
+    command: ["--addr", "dn3:7001", "--ms", "ms1:7100,ms2:7100,ms3:7100", "--data", "/data"]
+    environment:
+      <<: *env
+      MASTER_KEY_HEX: ${DN3_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes: ["dn3-data:/data", "./certs/dn3:/certs:ro"]
+    depends_on: [ms1, ms2, ms3]
+    networks: [dfsha]
+    restart: unless-stopped
+  dn4:
+    build: {context: ., dockerfile: data-node/Dockerfile}
+    command: ["--addr", "dn4:7001", "--ms", "ms1:7100,ms2:7100,ms3:7100", "--data", "/data"]
+    environment:
+      <<: *env
+      MASTER_KEY_HEX: ${DN4_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes: ["dn4-data:/data", "./certs/dn4:/certs:ro"]
+    depends_on: [ms1, ms2, ms3]
+    networks: [dfsha]
+    restart: unless-stopped
+  dn5:
+    build: {context: ., dockerfile: data-node/Dockerfile}
+    command: ["--addr", "dn5:7001", "--ms", "ms1:7100,ms2:7100,ms3:7100", "--data", "/data"]
+    environment:
+      <<: *env
+      MASTER_KEY_HEX: ${DN5_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes: ["dn5-data:/data", "./certs/dn5:/certs:ro"]
+    depends_on: [ms1, ms2, ms3]
+    networks: [dfsha]
+    restart: unless-stopped
+  client:
+    build: {context: ., dockerfile: client/Dockerfile}
+    entrypoint: ["sleep", "infinity"]      # uso: docker compose exec client python client/main.py <comando>
+    environment:
+      <<: *env
+      DFSHA_MS: "ms1:7100,ms2:7100,ms3:7100"
+    volumes: ["client-home:/root", "./certs/client:/certs:ro"]
+    depends_on: [ms1, ms2, ms3]
+    networks: [dfsha]
+
+networks:
+  dfsha: {}
+
+volumes:
+  ms1-data:
+  ms2-data:
+  ms3-data:
+  dn1-data:
+  dn2-data:
+  dn3-data:
+  dn4-data:
+  dn5-data:
+  client-home:
