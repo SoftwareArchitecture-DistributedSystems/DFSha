@@ -15,4 +15,7 @@ def test_bloques_repartidos_entre_varios_nodos(user):
     # con 5 bloques no deberían caer todos en los mismos tres nodos
     with user.open("d", "w") as h: h.write(os.urandom(40_000_000))
     nodos = {r for b in wait_replicas(user, "d", 3).blocks for r in b.replicas}
-    assert len(nodos) >= 4
+    assert len(nodos) >= 4, (
+        f"solo {len(nodos)} DN recibieron bloques: {sorted(nodos)}. "
+        "Revisa que los cinco nodos estén arriba antes de correr la suite: "
+        "scripts/start_cluster.sh --local (es idempotente y reinicia el clúster).")

@@ -15,19 +15,23 @@ def test_lectura_y_escritura_con_un_dn_caido(user):
         with user.open("g", "w") as h: h.write(nuevo)
         with user.open("g") as r: assert sha(r.read()) == sha(nuevo)
     finally:
-        # en modo local no hay supervisor, así que no intentamos levantarlo
-        node_ctl("start", victima) if not os.environ.get("DFSHA_LOCAL") else None
+        # lo dejamos de vuelta para no contaminar las pruebas que vienen después
+        node_ctl("start", victima)
 
 
 def test_re_replicacion_tras_caida(user):
     with user.open("rr", "w") as h: h.write(os.urandom(5_000_000))
     victima = wait_replicas(user, "rr", 3).blocks[0].replicas[0]
     node_ctl("stop", victima)
-    t0 = time.time()
-    # ~30 s para declararlo caído y después el tiempo de copiar el bloque
-    while time.time() - t0 < 120:
-        b = user.meta.get_block_locations(user.abspath("rr")).blocks[0]
-        if len(b.replicas) >= 3 and victima not in b.replicas:
-            return
-        time.sleep(3)
-    pytest.fail("no se restauró el factor de replicación 3")
+    try:
+        t0 = time.time()
+        # ~30 s para declararlo caído y después el tiempo de copiar el bloque
+        while time.time() - t0 < 120:
+            b = user.meta.get_block_locations(user.abspath("rr")).blocks[0]
+            if len(b.replicas) >= 3 and victima not in b.replicas:
+                return
+            time.sleep(3)
+        pytest.fail("no se restauró el factor de replicación 3")
+    finally:
+        # el nodo vuelve para que el resto de la suite corra con los 5 DN
+        node_ctl("start", victima)

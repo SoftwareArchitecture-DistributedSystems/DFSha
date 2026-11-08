@@ -6,6 +6,11 @@ ROOT=$(pwd)
 if [ "$1" == "--local" ]; then
   # Modo local: todo corre en la misma máquina, sin TLS. Sirve para probar rápido.
   RUN=${DFSHA_RUN:-/tmp/dfsha_run}; mkdir -p $RUN
+  # Arranque idempotente: si quedó un clúster de una corrida anterior (o una prueba
+  # de fallos dejó nodos detenidos), lo bajamos para no chocar puertos ni arrastrar
+  # un clúster incompleto.
+  export DFSHA_RUN=$RUN
+  scripts/stop_cluster.sh --local
   export PYTHONPATH=$ROOT:$ROOT/proto/generated
   scripts/generate_proto.sh >/dev/null
 
@@ -23,7 +28,21 @@ if [ "$1" == "--local" ]; then
     setsid nohup python3 data-node/main.py --addr 127.0.0.1:720$i --ms $MS --data $RUN/dn$i > $RUN/dn$i.log 2>&1 &
     echo $! > $RUN/dn$i.pid
   done
-  echo "clúster local en marcha (logs en $RUN). export DFSHA_MS=$MS"
+  # Esperamos a que los 8 servicios acepten conexiones antes de devolver el control.
+  OK=1
+  for _ in $(seq 1 60); do
+    OK=1
+    for p in 7100 7101 7102 7201 7202 7203 7204 7205; do
+      (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null || { OK=0; break; }
+    done
+    [ $OK = 1 ] && break
+    sleep 0.5
+  done
+  if [ $OK = 1 ]; then
+    echo "clúster local en marcha (logs en $RUN). export DFSHA_MS=$MS"
+  else
+    echo "ADVERTENCIA: no todos los servicios aceptaron conexiones; revisa $RUN/*.log" >&2
+  fi
 else
   # Modo Docker: generamos certificados y secretos solo la primera vez.
   [ -d certs ] || scripts/generate_certs.sh certs ms1 ms2 ms3 dn1 dn2 dn3 dn4 dn5 client

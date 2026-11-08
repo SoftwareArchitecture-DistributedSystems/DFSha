@@ -42,8 +42,6 @@ class DataNodeRegistry:
 class BlockManager:
     def __init__(self, repo, files, registry):
         self.repo, self.files, self.registry = repo, files, registry
-        # _assigned cuenta cuántos bloques mandamos a cada DN; es solo para balancear
-        self._assigned, self._lk = {}, threading.Lock()
 
     def allocate(self, sid, idx, uid):
         p = self.files.session(sid, uid)
@@ -54,15 +52,12 @@ class BlockManager:
         if len(live) < C.WRITE_QUORUM:
             raise DFSError(INSUFFICIENT_REPLICAS, f"solo {len(live)} DN vivos")
 
-        with self._lk:
-            # ordenamos por menos bloques asignados, después por más espacio libre y al final
-            # un random para desempatar. Así no siempre elegimos los mismos tres nodos.
-            order = sorted(live, key=lambda a: (self._assigned.get(a, 0), -live[a]["free"], random.random()))
-            pipe = order[:C.REPLICATION_FACTOR]
-            rot = idx % len(pipe)   # cambia quién arranca el pipeline según el número de bloque
-            pipe = pipe[rot:] + pipe[:rot]
-            for a in pipe:
-                self._assigned[a] = self._assigned.get(a, 0) + 1
+        # Round-robin estable sobre los DN vivos: los bloques consecutivos de un archivo
+        # recorren todos los nodos. Al depender del índice de bloque y no de estado en
+        # memoria, la distribución se mantiene aunque cambie el líder de Raft.
+        order = sorted(live)
+        start = idx % len(order)
+        pipe = [order[(start + k) % len(order)] for k in range(min(C.REPLICATION_FACTOR, len(order)))]
 
         bid = str(uuid.uuid4())
         return bid, p["base"] + 1, pipe, make_token(bid, "w", uid, C.WRITE_TOKEN_TTL_S)
