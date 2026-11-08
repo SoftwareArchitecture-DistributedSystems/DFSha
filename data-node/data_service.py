@@ -21,7 +21,11 @@ class DataNodeService(drpc.DataNodeServiceServicer):
         # El primer chunk trae la cabecera (id, token, hash, versión y próximos nodos).
         # Los siguientes son solo datos. Ojo: juntamos todo en memoria; para bloques
         # de 8 MiB nos alcanza, pero no es lo ideal para bloques gigantes.
-        first = next(request_iterator)
+        try:
+            first = next(request_iterator)
+        except StopIteration:
+            # Un cliente que cierra el stream antes de la cabecera no debe tumbar el DN.
+            return dpb.WriteAck(error="INVALID")
         if not check_token(first.token, first.block_id, "w"):
             return dpb.WriteAck(error="PERMISSION_DENIED")
         data = first.data + b"".join(c.data for c in request_iterator)
