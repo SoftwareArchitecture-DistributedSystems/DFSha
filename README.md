@@ -34,31 +34,63 @@ La primera vez el script crea `certs/` (una CA privada y un certificado por nodo
 
 Raft tarda unos segundos en elegir líder. Si el primer comando responde `NO_QUORUM` o `NOT_LEADER`, espera unos diez segundos y repítelo.
 
-La contraseña debe tener al menos 8 caracteres. `DFSHA_PASS` evita que la pida por teclado.
+## Cargar y recuperar un archivo
+
+La contraseña debe tener al menos 8 caracteres. `DFSHA_PASS` evita que la pida por teclado. Estos comandos se ejecutan desde la raíz del repositorio, con el clúster ya en marcha.
+
+1. Crear la cuenta e iniciar sesión.
 
 ```bash
 docker compose exec client python client/main.py register ana
 docker compose exec -e DFSHA_PASS=clave12345 client python client/main.py login ana
-docker compose exec client python client/main.py pwd
-docker compose exec client python client/main.py mkdir datos
-docker compose exec client python client/main.py cd datos
-docker compose exec client python client/main.py put /tmp/archivo.bin archivo.bin
-docker compose exec client python client/main.py get archivo.bin /tmp/recuperado.bin
 ```
 
-`pwd` muestra `/users/ana`. Cada usuario solo entra a su propia carpeta.
+2. Comprobar el directorio de trabajo. Tiene que mostrar `/users/ana`.
 
-Para crear el archivo dentro del contenedor antes del `put`:
+```bash
+docker compose exec client python client/main.py pwd
+```
+
+3. Crear la carpeta donde va a quedar el archivo y entrar en ella.
+
+```bash
+docker compose exec client python client/main.py mkdir datos
+docker compose exec client python client/main.py cd datos
+docker compose exec client python client/main.py pwd
+```
+
+El segundo `pwd` muestra `/users/ana/datos`.
+
+4. Crear un archivo de 20 MiB dentro del contenedor. Son tres bloques: dos de 8 MiB y uno con el resto.
 
 ```bash
 docker compose exec client python -c "import os; open('/tmp/archivo.bin','wb').write(os.urandom(20*1024*1024))"
+docker compose exec client sha256sum /tmp/archivo.bin
 ```
 
-Para copiar uno desde la máquina anfitriona:
+Si el archivo ya está en la máquina anfitriona, se copia así y se omite la línea anterior:
 
 ```bash
 docker compose cp archivo.bin client:/tmp/archivo.bin
 ```
+
+5. Subirlo. `put` parte el archivo, envía cada bloque al primer nodo de la cadena y ese nodo lo reenvía a los otros dos. Con dos confirmaciones el bloque queda escrito. El archivo se publica al terminar.
+
+```bash
+docker compose exec client python client/main.py put /tmp/archivo.bin archivo.bin
+docker compose exec client python client/main.py ls
+```
+
+`ls` muestra `archivo.bin` con la versión 1. El comando imprime el tamaño, el tiempo y los MB/s.
+
+6. Bajarlo y comparar el hash con el del paso 4. Las dos sumas tienen que ser iguales.
+
+```bash
+docker compose exec client python client/main.py get archivo.bin /tmp/recuperado.bin
+docker compose exec client sha256sum /tmp/archivo.bin /tmp/recuperado.bin
+```
+
+Cada usuario solo entra a su propia carpeta. `ana` no puede leer `/users/` de otra cuenta.
 
 Para apagar los contenedores, sin borrar los volúmenes:
 
